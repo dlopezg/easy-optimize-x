@@ -295,6 +295,34 @@ function optimizeX(params)
         %% Grab the Alphas %%
         tmp = sortrows([(1:length(efficiency))' efficiency], -2);
         fitidx = tmp(1:nalpha,1);
+
+        %% MEJORA PARA INTRODUCIR MAS VARIABILIDAD, SELECCION POR TORNEO:
+        % Esto lo hacemos para no imponer una selección tan elitista, es
+        % decir, así no siempre tenemos que seleccionar a los mejores.
+
+        % Definir el tamaño del torneo (numero de individuos que participan)
+        % tournamentSize = 50;
+        % fitidx = zeros(nalpha,1);
+        % 
+        % for k = 1:nalpha
+        %     % Selecciona aleatoriamente 'tournamentSize' individuos de la población
+        %     candidates = randsample(1:length(efficiency), tournamentSize);
+        % 
+        %     % De entre estos candidatos, se elige el que tenga la mayor eficiencia
+        %     [~, bestCandidateIdx] = max(efficiency(candidates));
+        %     fitidx(k) = candidates(bestCandidateIdx);
+        % end
+
+        %% OPCION 2: SELECCIÓN PROBABILÍSTICA:
+        
+        % Calcular las probabilidades de selección en función de la eficiencia
+        probs = efficiency / sum(efficiency);
+
+        % Seleccionar nalpha individuos con reemplazo según esas probabilidades
+        fitidx = randsample(1:length(efficiency), nalpha, true, probs);
+
+        %%
+        % Guardar los datos de los seleccionados
         fit.efficiency = efficiency(fitidx);
         fit.order = order(fitidx);
         fit.jitter = jitter(fitidx);
@@ -311,10 +339,16 @@ function optimizeX(params)
             orderidx = randperm(length(fit.order));
             fixcon = conidx(1);
             varcon = conidx(2:end);
+            %% Modificado para que el hijo sea una mezcla de los dos
+            n = 4;
+            fixcon = conidx(1:params.nconds/n);
+            varcon = conidx(params.nconds/n+1:end);
+            %%
             calpha = fit.order{orderidx(1)};
             mate = fit.order{orderidx(2)};
             calpha(ismember(calpha,varcon)) = mate(ismember(mate,varcon));
             d=makeX(params, calpha);
+
             X=d.X;
             X(:,end+1) = 1;
             for c = 1:ncontrasts
@@ -331,15 +365,22 @@ function optimizeX(params)
         if getappdata(h,'canceling'), delete(h); break; end
 
         %% Introduce Some Nasty Mutants %%
+        %% MODIFICACION: GENERAR SIEMPRE MUTANTES:
+        % mutsize = round(halfgen * 0.5); % Siempre generar mutantes
+        %%
+
+        % Código original:
         if g>2 && maxgeneff(g-1)==maxgeneff(g-2)
             mutsize = gensize;
         else
             mutsize = halfgen;
         end
+
         mut.efficiency = zeros(mutsize,1);
         mut.order = cell(mutsize,1);
         mut.jitter = cell(mutsize,1);
         genbins = floor(mutsize/(ngenbin/2):mutsize/(ngenbin/2):mutsize);
+
         for i = 1:mutsize
             d=makeX(params);
             X=d.X;
